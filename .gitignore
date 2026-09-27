@@ -8,3 +8,4 @@ output/candidate_pairs.tsv
 __pycache__/
 *.pyc
 .DS_Store
+output_v1_backup/

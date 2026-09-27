@@ -5,13 +5,14 @@ Given business records from three noisy sources (US, India, and unseen France at
 Source 2 / Source 3 record that refers to the same business as each Source 1 entity.
 
 **Pipeline:** sparse TF-IDF retrieval (top-50) → learned candidate pruner (~8 candidates per entity)
-→ LightGBM pair matcher (53 features) → threshold + one-owner assignment.
+→ two-stage LightGBM matcher (67 pair features + 9 context features) → one-owner assignment
+→ per-entity expected-F0.5 decision.
 
-| Validation (60k held-out entities) | |
-|---|---|
-| Macro F0.5 | **0.9667** |
-| Pair accuracy / AUC | 98.28% / 0.9988 |
-| Final candidates per entity (test) | 8.49 |
+| Validation (60k held-out entities) | v1 | **v2 (current)** |
+|---|---|---|
+| Macro F0.5 | 0.9667 | **0.9714** |
+| Training entities | 150k | 1M |
+| Final candidates per entity (test) | 8.49 | 8.49 |
 
 ## Repository layout
 

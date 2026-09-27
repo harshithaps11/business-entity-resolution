@@ -25,6 +25,10 @@ FEATURES = [
     "a_jacc", "a_idf_ovl", "a_idf_miss", "a_idf_extra", "a_tset", "a_partial", "a_empty_b",
     "num_jacc", "num_common", "num_a", "num_b", "num_extra_b", "num_first_in_b",
     "num_near", "num_conflict", "state_eq", "state_missing",
+    # v2: long (PIN / postal) vs short (house / unit) numbers, stopword-free names
+    "long_jacc", "long_conflict", "long_a_missing_b", "short_jacc", "short_conflict",
+    "short_extra_b", "num_min_reldiff", "num_first_b_in_a",
+    "ns_ratio", "ns_tsort", "ns_jacc", "ns_idf_ovl",
     # blocking / competition
     "bscore", "rk", "bscore_rel", "n_cands", "rrk", "r_margin", "r_ncomp", "src",
 ]
@@ -60,6 +64,27 @@ def _num_near(na, nb):
             if len(x) == len(y) and len(x) >= 2 and Levenshtein.distance(x, y) == 1:
                 best = max(best, 0.5)
     return best
+
+
+NAME_STOP = {"de", "du", "des", "la", "le", "les", "l", "d", "et", "en", "au", "aux", "a",
+             "of", "the", "and", "for", "at", "in", "on", "by"}
+
+
+def _set_feats(x, y):
+    """(jaccard, conflict) for two number sets; -1 when both empty."""
+    if not x and not y:
+        return -1.0, -1.0
+    inter = x & y
+    return len(inter) / len(x | y), float(bool(x) and bool(y) and not inter)
+
+
+def _reldiff(na, nb):
+    best = 2.0
+    for u in na:
+        for v in nb:
+            iu, iv = int(u[:9]), int(v[:9])
+            best = min(best, abs(iu - iv) / max(1, iu, iv))
+    return best if na and nb else -1.0
 
 
 def _pair_feats(a, b, dn, da):
@@ -107,6 +132,27 @@ def _pair_feats(a, b, dn, da):
         _num_near(na, nb) if na and nb else -1.0,
         float(bool(na) and bool(nb) and not ninter),
         float(sa == sb) if sa and sb else -1.0, float(not sa or not sb),
+        *_v2(ta, tb, ia, na, nb, na_l, nb_l, dn),
+    ]
+
+
+def _v2(ta, tb, ia, na, nb, na_l, nb_l, dn):
+    la_, lb_ = {n for n in na if len(n) >= 5}, {n for n in nb if len(n) >= 5}
+    sa_, sb_ = na - la_, nb - lb_
+    lj, lc = _set_feats(la_, lb_)
+    sj, sc = _set_feats(sa_, sb_)
+    xa, xb = ta - NAME_STOP, tb - NAME_STOP
+    xa, xb = (xa or ta), (xb or tb)
+    ja, jb = " ".join(sorted(xa)), " ".join(sorted(xb))
+    inter = xa & xb
+    wi = sum(ia.get(t, float(dn[hash(t) & IDF_MASK])) for t in inter)
+    wu = sum(ia.get(t, float(dn[hash(t) & IDF_MASK])) for t in xa | xb)
+    return [
+        lj, lc, float(bool(la_) and not (la_ & lb_)) if la_ else -1.0,
+        sj, sc, float(len(sb_ - sa_)),
+        _reldiff(na, nb), float(nb_l[0] in na) if nb_l else -1.0,
+        fuzz.ratio(ja, jb), fuzz.token_sort_ratio(ja, jb),
+        len(inter) / max(1, len(xa | xb)), wi / max(1e-6, wu),
     ]
 
 
